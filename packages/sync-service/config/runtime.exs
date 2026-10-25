@@ -256,6 +256,25 @@ config :electric,
   prometheus_port: prometheus_port,
   live_dashboard_port: live_dashboard_port,
   db_pool_size: env!("ELECTRIC_DB_POOL_SIZE", :integer, nil),
+  db_tcp_keepalive_idle:
+    env!(
+      "ELECTRIC_DATABASE_TCP_KEEPALIVE_IDLE",
+      &Electric.Config.parse_human_readable_time!/1,
+      nil
+    ),
+  db_tcp_keepalive_interval:
+    env!(
+      "ELECTRIC_DATABASE_TCP_KEEPALIVE_INTERVAL",
+      &Electric.Config.parse_human_readable_time!/1,
+      nil
+    ),
+  db_tcp_keepalive_count: env!("ELECTRIC_DATABASE_TCP_KEEPALIVE_COUNT", :integer, nil),
+  db_tcp_user_timeout:
+    env!(
+      "ELECTRIC_DATABASE_TCP_USER_TIMEOUT",
+      &Electric.Config.parse_human_readable_time!/1,
+      nil
+    ),
   replication_stream_id: replication_stream_id,
   replication_slot_temporary?: env!("CLEANUP_REPLICATION_SLOTS_ON_SHUTDOWN", :boolean, nil),
   replication_slot_temporary_random_name?:
@@ -292,6 +311,12 @@ config :electric,
   http_api_num_acceptors: env!("ELECTRIC_TWEAKS_HTTP_API_NUM_ACCEPTORS", :integer, 100),
   conn_max_requests: env!("ELECTRIC_TWEAKS_CONN_MAX_REQUESTS", :integer, nil),
   handler_fullsweep_after: env!("ELECTRIC_TWEAKS_HANDLER_FULLSWEEP_AFTER", :integer, nil),
+  http2_max_reset_stream_rate:
+    env!(
+      "ELECTRIC_TWEAKS_HTTP2_MAX_RESET_STREAM_RATE",
+      &Electric.Config.parse_http2_max_reset_stream_rate!/1,
+      nil
+    ),
   tcp_send_timeout:
     env!("ELECTRIC_TCP_SEND_TIMEOUT", &Electric.Config.parse_human_readable_time!/1, nil),
   tcp_read_timeout:

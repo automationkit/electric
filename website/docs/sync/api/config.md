@@ -96,6 +96,56 @@ How many connections Electric opens as a pool for handling shape queries.
 
 </EnvVarConfig>
 
+### ELECTRIC_DATABASE_TCP_KEEPALIVE_IDLE
+
+<EnvVarConfig
+    name="ELECTRIC_DATABASE_TCP_KEEPALIVE_IDLE"
+    optional="true"
+    example="30s">
+
+Enable TCP keepalive on database connections and set how long a connection may sit idle before the kernel starts sending probes.
+
+By default Electric leaves the operating system's settings in place. Setting this lets an idle replication connection detect the loss and reconnect sooner.
+
+See also `ELECTRIC_DATABASE_TCP_USER_TIMEOUT`, which bounds detection while data is actually in flight.
+
+</EnvVarConfig>
+
+### ELECTRIC_DATABASE_TCP_KEEPALIVE_INTERVAL
+
+<EnvVarConfig
+    name="ELECTRIC_DATABASE_TCP_KEEPALIVE_INTERVAL"
+    optional="true"
+    example="10s">
+
+How long to wait between individual TCP keepalive probes. Enables keepalive if set on its own.
+
+</EnvVarConfig>
+
+### ELECTRIC_DATABASE_TCP_KEEPALIVE_COUNT
+
+<EnvVarConfig
+    name="ELECTRIC_DATABASE_TCP_KEEPALIVE_COUNT"
+    optional="true"
+    example="3">
+
+How many unanswered TCP keepalive probes before the connection is dropped. Enables keepalive if set on its own.
+
+</EnvVarConfig>
+
+### ELECTRIC_DATABASE_TCP_USER_TIMEOUT
+
+<EnvVarConfig
+    name="ELECTRIC_DATABASE_TCP_USER_TIMEOUT"
+    optional="true"
+    example="60s">
+
+The maximum time data may remain unacknowledged before the connection is dropped (Linux `TCP_USER_TIMEOUT`).
+
+This complements the keepalive settings above. Keepalive probes only run while a connection is idle, whereas this bounds how long Electric keeps retransmitting a write to a peer that has stopped responding.
+
+</EnvVarConfig>
+
 ### ELECTRIC_DATABASE_CA_CERTIFICATE_FILE
 
 <EnvVarConfig
@@ -297,6 +347,18 @@ When Electric runs behind a connection-pooling reverse proxy or load balancer (A
 
 </EnvVarConfig>
 
+### ELECTRIC_TWEAKS_HTTP2_MAX_RESET_STREAM_RATE
+
+<EnvVarConfig
+    name="ELECTRIC_TWEAKS_HTTP2_MAX_RESET_STREAM_RATE"
+    defaultValue="disabled"
+    example="500/10s">
+Maximum number of HTTP/2 stream resets (`RST_STREAM` frames) a single client connection may send within a time window, in the form `COUNT/DURATION` (for example `500/10s`), or `disabled`. When a connection exceeds the limit, Electric closes the whole connection and every request still in flight on it is dropped.
+
+This is disabled by default. Behind a reverse proxy that multiplexes many end clients onto a few upstream HTTP/2 connections, ordinary client-side cancellations of live requests are enough to trip the limit and disconnect every other client sharing that connection. Set it only if Electric is directly exposed to untrusted HTTP/2 clients and you want the rate limit as a defence against HTTP/2 Rapid Reset style abuse.
+
+</EnvVarConfig>
+
 ### ELECTRIC_SHAPE_CHUNK_BYTES_THRESHOLD
 
 <EnvVarConfig
@@ -329,11 +391,15 @@ Port that the [HTTP API](/docs/sync/api/http) is exposed on.
     defaultValue="false"
     example="true">
 
-Whether to terminate idle shape consumer processes after `ELECTRIC_SHAPE_HIBERNATE_AFTER` seconds. This saves on memory at the cost of slightly higher CPU usage. When receiving a transaction that contains changes matching a given shape, a consumer process is started to handle the update. If more transactions matching the shape appear within the time defined by `ELECTRIC_SHAPE_HIBERNATE_AFTER` then the consumer will remain active, if not it will be terminated.
+Whether to terminate idle shape consumer processes. This saves on memory at the cost of slightly higher CPU usage.
 
-If set to `false` the consumer processes will [hibernate](https://www.erlang.org/doc/apps/erts/erlang#hibernate/3) instead of terminating, meaning they still occupy some memory but are inactive until passed transaction operations to process.
+A consumer process first [hibernates](https://www.erlang.org/doc/apps/erts/erlang#hibernate/3) after `ELECTRIC_SHAPE_HIBERNATE_AFTER` of inactivity. With this option enabled, a hibernated consumer that stays idle for a further `ELECTRIC_SHAPE_SUSPEND_AFTER` is terminated. When a transaction containing changes matching the shape arrives, the consumer process is started again to handle the update.
 
-If you enable this feature then you should configure `ELECTRIC_SHAPE_HIBERNATE_AFTER` to match the usage patterns of your application to avoid unnecessary process churn.
+Not every consumer process is eligible for termination. Shapes with [subquery](/docs/sync/guides/shapes#subqueries) dependencies and shapes that other shapes depend on through a subquery, can only hibernate; they never get suspended.
+
+If set to `false` the consumer processes only hibernate, meaning they still occupy some memory but are inactive until passed transaction operations to process.
+
+If you enable this feature then you should configure `ELECTRIC_SHAPE_SUSPEND_AFTER` to match the usage patterns of your application to avoid unnecessary process churn.
 
 </EnvVarConfig>
 
@@ -344,7 +410,18 @@ If you enable this feature then you should configure `ELECTRIC_SHAPE_HIBERNATE_A
     defaultValue="30s"
     example="5000ms">
 
-The amount of time a consumer process remains active without receiving transaction operations before either [hibernating](https://www.erlang.org/doc/apps/erts/erlang#hibernate/3) or terminating (if `ELECTRIC_SHAPE_SUSPEND_CONSUMER` is `true`).
+The amount of time a consumer process remains active without receiving transaction operations before [hibernating](https://www.erlang.org/doc/apps/erts/erlang#hibernate/3).
+
+</EnvVarConfig>
+
+### ELECTRIC_SHAPE_SUSPEND_AFTER
+
+<EnvVarConfig
+    name="ELECTRIC_SHAPE_SUSPEND_AFTER"
+    defaultValue="10m"
+    example="30m">
+
+The amount of time a hibernated consumer process remains idle before being terminated. Only applies when `ELECTRIC_SHAPE_SUSPEND_CONSUMER` is `true`. Counted from the moment the consumer hibernates, so an idle consumer is terminated roughly `ELECTRIC_SHAPE_HIBERNATE_AFTER` plus `ELECTRIC_SHAPE_SUSPEND_AFTER` after its last activity.
 
 </EnvVarConfig>
 
